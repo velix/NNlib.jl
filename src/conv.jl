@@ -114,6 +114,7 @@ function ∇conv_data!(dx::AbstractArray{T,3}, dy::AbstractArray{T,3}, w::Abstra
     return dx
 end
 
+# HERE
 conv!(y::AbstractArray{T,4}, x::AbstractArray{T,4}, w::AbstractArray{T,4};
       pad = 0, stride = 1, dilation = 1, flipkernel=0) where T =
   conv2d!(y, x, w, padding = pad, stride = stride, dilation = dilation, mode=flipkernel)

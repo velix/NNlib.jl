@@ -79,6 +79,7 @@ function im2col_2d!(img::AbstractArray{T,3}, col::AbstractArray{T,2}, cdims::Con
 
           @inbounds for w in (spill_w_lo+1):(width_col - spill_w_hi)
             input_kw = project(w, stride_w, pad_w_lo) + (kw - 1)*dil_w
+            # HERE
             col_reshaped[w, h, flipk(kw, kh)..., c] = img[input_kw, input_kh, c]
           end
         end
@@ -336,6 +337,7 @@ function depthwiseconv2d_grad_x!(dx::AbstractArray{T,4}, x::AbstractArray{T,4}, 
     return dx
 end
 
+# HERE 2
 function conv2d!(y::AbstractArray{T,4}, x::AbstractArray{T,4}, w::AbstractArray{T,4},
                  cdims::ConvDims; alpha=T(1)) where T
     Wx, Hx = img_size(cdims)
@@ -352,6 +354,24 @@ function conv2d!(y::AbstractArray{T,4}, x::AbstractArray{T,4}, w::AbstractArray{
     return y
 end
 
+function conv2d!(y::AbstractArray{T, 4}, x::BitArray{4}, w::BitArray{4},
+                  cdims::ConvDims; alpha=T(1)) where T
+
+      Wx, Hx = img_size(cdims)
+      Ww, Hw = kernel_size(cdims)
+      Wy, Hy = output_size(cdims)
+      Cx = img_channels(cdims)
+      M, N, K, Y = Wy*Hy, size(y,3), prod(size(w)[1:3]), prod(size(y)[1:3])
+
+      col = similar(x, im2col_dims(w, y))
+      @inbounds for batch_idx in 1:size(x,4)
+          im2col_2d!(view(x, :, :, :, batch_idx), col, cdims)
+          binary_gemm!(col, w, y, M, N, K)
+        end
+      return y
+end
+
+# HERE 1
 function conv2d!(y::AbstractArray{T,4}, x::AbstractArray{T,4}, w::AbstractArray{T,4};
                padding=0, stride=1, dilation=1, mode=0, alpha=T(1)) where T
     if mode != 0 && mode != 1
