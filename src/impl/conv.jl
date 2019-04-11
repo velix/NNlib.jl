@@ -1,3 +1,5 @@
+include("binary_helpers.jl")
+
 # convert padding etc. size to an Int array of the right dimension
 function psize(p, x)
   nd = ndims(x)-2
@@ -357,6 +359,7 @@ end
 function conv2d!(y::AbstractArray{T, 4}, x::BitArray{4}, w::BitArray{4},
                   cdims::ConvDims; alpha=T(1)) where T
 
+      println("USING BINARY CONVOLUTION")
       Wx, Hx = img_size(cdims)
       Ww, Hw = kernel_size(cdims)
       Wy, Hy = output_size(cdims)
