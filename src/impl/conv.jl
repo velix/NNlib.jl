@@ -1,5 +1,3 @@
-include("binary_helpers.jl")
-
 # convert padding etc. size to an Int array of the right dimension
 function psize(p, x)
   nd = ndims(x)-2
@@ -349,6 +347,11 @@ function conv2d!(y::AbstractArray{T,4}, x::AbstractArray{T,4}, w::AbstractArray{
     M, N, K, Y = Wy*Hy, size(y,3), prod(size(w)[1:3]), prod(size(y)[1:3])
 
     x2 = similar(x, im2col_dims(w, y))
+
+    println("x2 size $(size(x2))")
+    println("w size $(size(w))")
+    println("y size $(size(y))")
+
     @inbounds for n in 1:size(x,4)
         im2col_2d!(view(x, :, :, :, n), x2, cdims)
         gemm!('N','N',M,N,K,alpha,pointer(x2),pointer(w),T(0),pointer(y,(n - 1)*Y + 1))
@@ -359,19 +362,45 @@ end
 function conv2d!(y::AbstractArray{T, 4}, x::BitArray{4}, w::BitArray{4},
                   cdims::ConvDims; alpha=T(1)) where T
 
-      println("USING BINARY CONVOLUTION")
       Wx, Hx = img_size(cdims)
       Ww, Hw = kernel_size(cdims)
       Wy, Hy = output_size(cdims)
       Cx = img_channels(cdims)
       M, N, K, Y = Wy*Hy, size(y,3), prod(size(w)[1:3]), prod(size(y)[1:3])
 
+      y = Array(y)
+
       col = similar(x, im2col_dims(w, y))
+
       @inbounds for batch_idx in 1:size(x,4)
           im2col_2d!(view(x, :, :, :, batch_idx), col, cdims)
-          binary_gemm!(col, w, y, M, N, K)
+          binary_gemm!(col, w, y, M, N, K, batch_idx)
         end
       return y
+end
+
+#   COL   *    W    ->    Y
+# [M x K] * [K x N] -> [M x N]
+# gemm!(M, N, K, col_ptr, w_ptr, beta, y_ptr)
+function binary_gemm!(col::BitArray, W::BitArray, out::AbstractArray, M, N, K, batch_idx)
+  println("col is $(size(col)) should be ($M, $K)")
+  println("W is $(size(W)) should be ($K, $N)")
+  println("out is $(size(out)) should be ($M, $N)")
+
+  out_col = reshape(out[:, :, :, batch_idx], (M, N))
+  filter_col = reshape(W, (:, 6))
+
+  println("reshaped out: $(size(out_col))")
+  println("reshaped w: $(size(filter_col))")
+
+  for m in 1:M
+      for n in 1:N
+          dot_prod = popcount(xnor(col[m, :], filter_col[:, n]))
+          out_col[m, n] = dot_prod
+      end
+  end
+
+  return reshape(out_col, size(out)[1:3])
 end
 
 # HERE 1
