@@ -348,9 +348,9 @@ function conv2d!(y::AbstractArray{T,4}, x::AbstractArray{T,4}, w::AbstractArray{
 
     x2 = similar(x, im2col_dims(w, y))
 
-    println("x2 size $(size(x2))")
-    println("w size $(size(w))")
-    println("y size $(size(y))")
+    # println("x2 size $(size(x2))")
+    # println("w size $(size(w))")
+    # println("y size $(size(y))")
 
     @inbounds for n in 1:size(x,4)
         im2col_2d!(view(x, :, :, :, n), x2, cdims)
@@ -368,7 +368,7 @@ function conv2d!(y::AbstractArray{T, 4}, x::BitArray{4}, w::BitArray{4},
       Cx = img_channels(cdims)
       M, N, K, Y = Wy*Hy, size(y,3), prod(size(w)[1:3]), prod(size(y)[1:3])
 
-      y = Array(y)
+      y = Array{Int32}(y)
 
       col = similar(x, im2col_dims(w, y))
 
@@ -402,6 +402,11 @@ function binary_gemm!(col::BitArray, W::BitArray, out::AbstractArray, M, N, K, b
 
   return reshape(out_col, size(out)[1:3])
 end
+
+xnor(x::BitArray{1}, y::BitArray{1})::BitArray{1} = x .== y
+xnor(x, y) = x .== y
+
+popcount(x::BitArray)::Int64 = 2*count(x)-length(x)
 
 # HERE 1
 function conv2d!(y::AbstractArray{T,4}, x::AbstractArray{T,4}, w::AbstractArray{T,4};
