@@ -53,6 +53,14 @@ for (front_name, backend) in (
     end
 end
 
+function conv!(out::AbstractArray{T, 5}, in1::BitArray{5},
+                in2::BitArray{5}, cdims::ConvDims; kwargs...) where {T <: Union{Float32, Float64}}
+
+        println("In the conv you should be")
+        conv_im2col!(out, in1, in2, cdims; kwargs...)
+end
+
+
 # Our strategy for 1d and 2d convolution is to reshape to 3d convolutions, which
 # makes things MUCH EASIER for us on the backend side, and is in general pretty fast,
 # since we can specialize on sizes.

@@ -42,6 +42,9 @@ which should eliminate any need for large allocations within this method.
     # dotproducted with that input patch, effectively computing a convolution
     # in a somewhat memory-wasteful but easily-computed way (since we already
     # have an extremely highly-optimized GEMM call available in BLAS).
+
+    println("using regular mult")
+
     M = prod(output_size(cdims))
     N = channels_out(cdims)
     K = prod(kernel_size(cdims))*channels_in(cdims)
@@ -57,6 +60,64 @@ which should eliminate any need for large allocations within this method.
     end
     return y
 end
+
+"""
+Similar to the above, but used for bitpacked inputs and weights
+"""
+function conv_im2col!(
+        y::AbstractArray{T,5}, x::BitArray{5},
+        w::BitArray{5}, cdims::DenseConvDims;
+        col::AbstractArray{T,2}=similar(x, im2col_dims(cdims)),
+        alpha::T=T(1), beta::T=T(0)) where {T}
+    check_dims(size(x), size(w), size(y), cdims)
+
+    println("Using binary mult")
+
+    M = prod(output_size(cdims))
+    N = channels_out(cdims)
+    K = prod(kernel_size(cdims))*channels_in(cdims)
+
+    y = Array{Int32}(y)
+
+    @inbounds for batch_idx in 1:size(x,5)
+        @timeit_debug to "im2col!" im2col!(col, view(x, :, :, :, :, batch_idx), cdims)
+        col_ptr = pointer(col)
+        w_ptr = pointer(w)
+        y_ptr = pointer(y, (batch_idx - 1)*M*N + 1)
+        binary_gemm!(col, w, y, M, N, K, batch_idx)
+        end
+    return y
+end
+
+#   COL   *    W    ->    Y
+# [M x K] * [K x N] -> [M x N]
+# gemm!(M, N, K, col_ptr, w_ptr, beta, y_ptr)
+function binary_gemm!(col::BitArray, W::BitArray, out::AbstractArray, M, N, K, batch_idx)
+    println("col is $(size(col)) should be ($M, $K)")
+    println("W is $(size(W)) should be ($K, $N)")
+    println("out is $(size(out)) should be ($M, $N)")
+  
+    out_col = reshape(out[:, :, :, batch_idx], (M, N))
+    filter_col = reshape(W, (:, 6))
+  
+    println("reshaped out: $(size(out_col))")
+    println("reshaped w: $(size(filter_col))")
+  
+    for m in 1:M
+        for n in 1:N
+            dot_prod = popcount(xnor(col[m, :], filter_col[:, n]))
+            out_col[m, n] = dot_prod
+        end
+    end
+  
+    return reshape(out_col, size(out)[1:3])
+  end
+  
+  xnor(x::BitArray{1}, y::BitArray{1})::BitArray{1} = x .== y
+  xnor(x, y) = x .== y
+  
+  popcount(x::BitArray)::Int64 = 2*count(x)-length(x)
+
 
 """
     ∇conv_filter_im2col!(dw, x, dy, cdims, col=similar(dw); alpha=1, beta=0)
