@@ -43,7 +43,6 @@ which should eliminate any need for large allocations within this method.
     # in a somewhat memory-wasteful but easily-computed way (since we already
     # have an extremely highly-optimized GEMM call available in BLAS).
 
-    println("using regular mult")
 
     M = prod(output_size(cdims))
     N = channels_out(cdims)
@@ -71,7 +70,6 @@ function conv_im2col!(
         alpha::T=T(1), beta::T=T(0)) where {T}
     check_dims(size(x), size(w), size(y), cdims)
 
-    println("Using binary mult")
 
     M = prod(output_size(cdims))
     N = channels_out(cdims)
@@ -80,10 +78,7 @@ function conv_im2col!(
     y = Array{Int32}(y)
 
     @inbounds for batch_idx in 1:size(x,5)
-        @timeit_debug to "im2col!" im2col!(col, view(x, :, :, :, :, batch_idx), cdims)
-        col_ptr = pointer(col)
-        w_ptr = pointer(w)
-        y_ptr = pointer(y, (batch_idx - 1)*M*N + 1)
+        @timeit_debug to "im2col_binary!" im2col!(col, view(x, :, :, :, :, batch_idx), cdims)
         binary_gemm!(col, w, y, M, N, K, batch_idx)
         end
     return y
@@ -93,15 +88,18 @@ end
 # [M x K] * [K x N] -> [M x N]
 # gemm!(M, N, K, col_ptr, w_ptr, beta, y_ptr)
 function binary_gemm!(col::BitArray, W::BitArray, out::AbstractArray, M, N, K, batch_idx)
-    println("col is $(size(col)) should be ($M, $K)")
-    println("W is $(size(W)) should be ($K, $N)")
-    println("out is $(size(out)) should be ($M, $N)")
+    # println("col is $(size(col)) should be ($M, $K)")
+    # println("W is $(size(W)) should be ($K, $N)")
+    # println("out is $(size(out)) should be ($M, $N)")
   
-    out_col = reshape(out[:, :, :, batch_idx], (M, N))
-    filter_col = reshape(W, (:, 6))
+    # Reshape the output into (width * height) X n_filters
+    out_col = reshape(out[:, :, :, :, batch_idx], (M, N))
+
+    # Reshape the filters into (f_width * f_height * depth) X n_filters
+    filter_col = reshape(W, (:, N))
   
-    println("reshaped out: $(size(out_col))")
-    println("reshaped w: $(size(filter_col))")
+    # println("reshaped out: $(size(out_col))")
+    # println("reshaped w: $(size(filter_col))")
   
     for m in 1:M
         for n in 1:N
@@ -110,7 +108,7 @@ function binary_gemm!(col::BitArray, W::BitArray, out::AbstractArray, M, N, K, b
         end
     end
   
-    return reshape(out_col, size(out)[1:3])
+    return reshape(out_col, size(out)[1:4])
   end
   
   xnor(x::BitArray{1}, y::BitArray{1})::BitArray{1} = x .== y

@@ -53,10 +53,9 @@ for (front_name, backend) in (
     end
 end
 
-function conv!(out::AbstractArray{T, 5}, in1::BitArray{5},
+function conv!(out::BitArray{5}, in1::BitArray{5},
                 in2::BitArray{5}, cdims::ConvDims; kwargs...) where {T <: Union{Float32, Float64}}
 
-        println("In the conv you should be")
         conv_im2col!(out, in1, in2, cdims; kwargs...)
 end
 
